@@ -27,6 +27,13 @@ website/node_modules
 
 website/vendor
 
+# Terraform files that may be left after running the example
+terraform-provider-mreg
+.terraform*
+terraform.tfstate*
+crash.log
+terraform-provider-mreg-lockfile
+
 # Test exclusions
 !command/test-fixtures/**/*.tfstate
 !command/test-fixtures/**/.terraform/
