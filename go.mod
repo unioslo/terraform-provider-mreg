@@ -4,6 +4,6 @@ go 1.15
 
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.3.0
-	github.com/hashicorp/terraform-plugin-sdk/v2 v2.4.0
+	github.com/hashicorp/terraform-plugin-sdk/v2 v2.4.4
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 )
