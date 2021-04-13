@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     mreg = {
-      version = "0.1.0"
+      version = "0.1.1"
       source  = "uio.no/usit/mreg"
     }
   }

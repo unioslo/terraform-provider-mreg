@@ -98,9 +98,9 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			ipaddress = manual_ip
 		} else {
 			// Find a free IP address in Mreg
-			body, _, diags := httpRequest(
+			body, _, diags := apiClient.httpRequest(
 				"GET", fmt.Sprintf("/api/v1/networks/%s/first_unused", url.QueryEscape(network)),
-				nil, http.StatusOK, apiClient)
+				nil, http.StatusOK)
 			if len(diags) > 0 {
 				return diags
 			}
@@ -115,7 +115,7 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			"contact":   contact,
 			"comment":   comment,
 		}
-		_, _, diags := httpRequest("POST", "/api/v1/hosts/", request, http.StatusCreated, apiClient)
+		_, _, diags := apiClient.httpRequest("POST", "/api/v1/hosts/", request, http.StatusCreated)
 		if len(diags) > 0 {
 			return diags
 		}
@@ -156,8 +156,8 @@ func resourceHostsRead(ctx context.Context, d *schema.ResourceData, m interface{
 		hostname := host["name"].(string)
 
 		// Read information about this host from Mreg
-		_, body, diags := httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(hostname),
-			nil, http.StatusOK, apiClient)
+		_, body, diags := apiClient.httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(hostname),
+			nil, http.StatusOK)
 		if len(diags) > 0 {
 			return diags
 		}
@@ -192,8 +192,8 @@ func resourceHostsDelete(ctx context.Context, d *schema.ResourceData, m interfac
 		hostname := host["name"].(string)
 
 		// Delete this host from Mreg
-		_, _, diags := httpRequest("DELETE", "/api/v1/hosts/"+url.QueryEscape(hostname),
-			nil, http.StatusNoContent, apiClient)
+		_, _, diags := apiClient.httpRequest("DELETE", "/api/v1/hosts/"+url.QueryEscape(hostname),
+			nil, http.StatusNoContent)
 		if len(diags) > 0 {
 			return diags
 		}

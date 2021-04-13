@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -39,7 +38,17 @@ func New(version string) func() *schema.Provider {
 				},
 				"token": &schema.Schema{
 					Type:      schema.TypeString,
-					Required:  true,
+					Optional:  true,
+					Sensitive: true,
+				},
+				"username": &schema.Schema{
+					Type:      schema.TypeString,
+					Optional:  true,
+					Sensitive: true,
+				},
+				"password": &schema.Schema{
+					Type:      schema.TypeString,
+					Optional:  true,
 					Sensitive: true,
 				},
 			},
@@ -51,27 +60,17 @@ func New(version string) func() *schema.Provider {
 	}
 }
 
-type apiClient struct {
-	// Add whatever fields, client or connection info, etc. here
-	// you would need to setup to communicate with the upstream
-	// API.
-	Serverurl string
-	Token     string
-}
-
-func (c apiClient) UrlWithoutSlash() string {
-	return strings.TrimSuffix(c.Serverurl, "/")
-}
-
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(c context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-		// Setup a User-Agent for your API client (replace the provider name for yours):
-		// userAgent := p.UserAgent("terraform-provider-scaffolding", version)
-		// TODO: myClient.UserAgent = userAgent
-
-		return apiClient{
+		client := apiClient{
 			Serverurl: d.Get("serverurl").(string),
 			Token:     d.Get("token").(string),
-		}, nil
+			Username:  d.Get("username").(string),
+			Password:  d.Get("password").(string),
+		}
+		if client.Username != "" {
+			client.login()
+		}
+		return client, nil
 	}
 }

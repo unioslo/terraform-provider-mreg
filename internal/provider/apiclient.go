@@ -7,11 +7,23 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 )
 
-func httpRequest(method, urlPath string, requestBody map[string]interface{}, expectedStatus int, apiClient apiClient) (bodyText string, body interface{}, diags diag.Diagnostics) {
+type apiClient struct {
+	Serverurl string
+	Token     string
+	Username  string
+	Password  string
+}
+
+func (c apiClient) UrlWithoutSlash() string {
+	return strings.TrimSuffix(c.Serverurl, "/")
+}
+
+func (apiClient apiClient) httpRequest(method, urlPath string, requestBody map[string]interface{}, expectedStatus int) (bodyText string, body interface{}, diags diag.Diagnostics) {
 	// Turn the request body structure into JSON
 	var reqBodyReader io.Reader
 	if requestBody != nil {
@@ -30,10 +42,13 @@ func httpRequest(method, urlPath string, requestBody map[string]interface{}, exp
 		diags = diag.FromErr(err)
 		return
 	}
-	req.Header.Add("Authorization", "Token "+apiClient.Token)
+	if apiClient.Token != "" {
+		req.Header.Add("Authorization", "Token "+apiClient.Token)
+	}
 	if reqBodyReader != nil {
 		req.Header.Add("Content-Type", "application/json")
 	}
+	req.Header.Add("User-Agent", "Terraform provider for Mreg")
 
 	// Perform the request
 	response, err := http.DefaultClient.Do(req)
@@ -76,4 +91,23 @@ func httpRequest(method, urlPath string, requestBody map[string]interface{}, exp
 	}
 
 	return
+}
+
+func (c *apiClient) login() diag.Diagnostics {
+	bodyText, body, diags := c.httpRequest("POST", "/api/token-auth/", map[string]interface{}{
+		"username": c.Username,
+		"password": c.Password,
+	}, http.StatusOK)
+	if diags != nil {
+		return diags
+	}
+	data, ok := body.(map[string]interface{})
+	if !ok {
+		return diag.Errorf("The Mreg token-auth endpoint returned an unexpected result: %s", bodyText)
+	}
+	c.Token, ok = data["token"].(string)
+	if !ok {
+		return diag.Errorf("The Mreg token-auth endpoint returned an unexpected result: %s", bodyText)
+	}
+	return nil
 }

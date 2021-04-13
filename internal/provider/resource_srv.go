@@ -59,7 +59,7 @@ func resourceSRVCreate(ctx context.Context, d *schema.ResourceData, m interface{
 	apiClient := m.(apiClient)
 
 	// Find the host ID in Mreg by looking up the hostname
-	_, body, diags := httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(d.Get("target_host").(string)), nil, http.StatusOK, apiClient)
+	_, body, diags := apiClient.httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(d.Get("target_host").(string)), nil, http.StatusOK)
 	if len(diags) > 0 {
 		return diags
 	}
@@ -77,7 +77,7 @@ func resourceSRVCreate(ctx context.Context, d *schema.ResourceData, m interface{
 		"port":     d.Get("port"),
 		"host":     hostID,
 	}
-	_, _, diags = httpRequest("POST", "/api/v1/srvs/", postdata, http.StatusCreated, apiClient)
+	_, _, diags = apiClient.httpRequest("POST", "/api/v1/srvs/", postdata, http.StatusCreated)
 	if len(diags) > 0 {
 		return diags
 	}
@@ -97,7 +97,7 @@ func resourceSRVDelete(ctx context.Context, d *schema.ResourceData, m interface{
 	serviceProtoName := fmt.Sprintf("_%s._%s.%s.", d.Get("service").(string), d.Get("proto").(string), d.Get("name").(string))
 
 	// Find the host ID in Mreg by looking up the hostname
-	_, body, diags := httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(d.Get("target_host").(string)), nil, http.StatusOK, apiClient)
+	_, body, diags := apiClient.httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(d.Get("target_host").(string)), nil, http.StatusOK)
 	if len(diags) > 0 {
 		return diags
 	}
@@ -105,7 +105,7 @@ func resourceSRVDelete(ctx context.Context, d *schema.ResourceData, m interface{
 	hostID := int(bodyMap["id"].(float64)) // Go always turns JSON numbers into float64 values
 
 	// Find all SRV records of that particular type, for that particular host
-	_, body, diags = httpRequest("GET", fmt.Sprintf("/api/v1/srvs/?host=%d&name=%s", hostID, url.QueryEscape(serviceProtoName)), nil, http.StatusOK, apiClient)
+	_, body, diags = apiClient.httpRequest("GET", fmt.Sprintf("/api/v1/srvs/?host=%d&name=%s", hostID, url.QueryEscape(serviceProtoName)), nil, http.StatusOK)
 	if len(diags) > 0 {
 		return diags
 	}
@@ -139,7 +139,7 @@ func resourceSRVDelete(ctx context.Context, d *schema.ResourceData, m interface{
 	}
 
 	// Delete the SRV record
-	_, _, diags = httpRequest("DELETE", fmt.Sprintf("/api/v1/srvs/%d", srvId), nil, http.StatusNoContent, apiClient)
+	_, _, diags = apiClient.httpRequest("DELETE", fmt.Sprintf("/api/v1/srvs/%d", srvId), nil, http.StatusNoContent)
 	if len(diags) > 0 {
 		return diags
 	}
