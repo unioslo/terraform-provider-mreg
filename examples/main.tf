@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     mreg = {
-      version = "0.1.1"
+      version = "0.1.4"
       source  = "uio.no/usit/mreg"
     }
   }
@@ -42,7 +42,17 @@ resource "mreg_hosts" "loop_hosts" {
   }
   contact = "your.email.address@example.com"
   comment = "Created by the Terraform provider for Mreg"
-  network = "192.0.2.0/24"
+
+resource "mreg_hosts" "metahosts" {
+  # hosts without IP addresses
+  host {
+    name = "terraform-provider-meta01.example.com"
+  }
+  host {
+    name = "terraform-provider-meta02.example.com"
+  }
+  contact = "your.email.address@example.com"
+  comment = "Created by the Terraform provider for Mreg"
 }
 
 # Here's how to create SRV records

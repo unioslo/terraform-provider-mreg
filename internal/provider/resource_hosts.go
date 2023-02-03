@@ -54,7 +54,7 @@ func resourceHosts() *schema.Resource {
 			},
 			"network": &schema.Schema{
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 				ForceNew: true,
 			},
 			"comment": &schema.Schema{
@@ -97,23 +97,28 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		if manual_ip != "" {
 			ipaddress = manual_ip
 		} else {
-			// Find a free IP address in Mreg
-			body, _, diags := apiClient.httpRequest(
-				"GET", fmt.Sprintf("/api/v1/networks/%s/first_unused", url.QueryEscape(network)),
-				nil, http.StatusOK)
-			if len(diags) > 0 {
-				return diags
-			}
+			if network != "" {
+				// Find a free IP address in Mreg
+				body, _, diags := apiClient.httpRequest(
+					"GET", fmt.Sprintf("/api/v1/networks/%s/first_unused", url.QueryEscape(network)),
+					nil, http.StatusOK)
+				if len(diags) > 0 {
+					return diags
+				}
 
-			ipaddress = strings.Trim(body, "\"")
+				ipaddress = strings.Trim(body, "\"")
+			}
 		}
 
-		// Use the IP address and allocate a new host object in Mreg
+		// Allocate a new host object in Mreg
 		request := map[string]interface{}{
-			"name":      hostname,
-			"ipaddress": ipaddress,
-			"contact":   contact,
-			"comment":   comment,
+			"name":    hostname,
+			"contact": contact,
+			"comment": comment,
+		}
+		// Only add the ipaddress parameter if the host is supposed to have an IP address, or it will fail
+		if ipaddress != "" {
+			request["ipaddress"] = ipaddress
 		}
 		_, _, diags := apiClient.httpRequest("POST", "/api/v1/hosts/", request, http.StatusCreated)
 		if len(diags) > 0 {
@@ -221,7 +226,7 @@ func GetStringFromData(v interface{}, path string) string {
 		if err == nil {
 			// If the key is a number, we assume the structure is an array
 			arr, ok := v.([]interface{})
-			if !ok {
+			if !ok || int64(len(arr)) <= iKey {
 				return ""
 			}
 			v = arr[iKey]
