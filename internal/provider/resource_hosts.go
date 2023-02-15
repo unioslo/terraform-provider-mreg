@@ -67,6 +67,11 @@ func resourceHosts() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+			"policies": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 		},
 	}
 }
@@ -80,6 +85,16 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	comment := d.Get("comment").(string)
 	contact := d.Get("contact").(string)
 	network := d.Get("network").(string)
+	policies_string := d.Get("policies").(string)
+	policies := make([]string, 0)
+	if policies_string != "" {
+		for _, s := range strings.Split(policies_string, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				policies = append(policies, s)
+			}
+		}
+	}
 
 	lock := fslock.New("terraform-provider-mreg-lockfile")
 	lock.Lock()
@@ -111,18 +126,29 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		}
 
 		// Allocate a new host object in Mreg
-		request := map[string]interface{}{
+		postdata := map[string]interface{}{
 			"name":    hostname,
 			"contact": contact,
 			"comment": comment,
 		}
 		// Only add the ipaddress parameter if the host is supposed to have an IP address, or it will fail
 		if ipaddress != "" {
-			request["ipaddress"] = ipaddress
+			postdata["ipaddress"] = ipaddress
 		}
-		_, _, diags := apiClient.httpRequest("POST", "/api/v1/hosts/", request, http.StatusCreated)
+		_, _, diags := apiClient.httpRequest("POST", "/api/v1/hosts/", postdata, http.StatusCreated)
 		if len(diags) > 0 {
 			return diags
+		}
+
+		// Assign host policies, if any
+		for _, p := range policies {
+			postdata := map[string]interface{}{
+				"name": hostname,
+			}
+			_, _, diags := apiClient.httpRequest("POST", "/api/v1/hostpolicy/roles/"+p+"/hosts/", postdata, http.StatusCreated)
+			if len(diags) > 0 {
+				return diags
+			}
 		}
 
 		// Update the ResourceData

@@ -7,8 +7,8 @@ go get -v
 go build
 #TODO after the provider is added to the registry, there's no need to copy the file here
 rm -rf ~/.terraform.d/plugins/uio.no/usit/mreg/
-mkdir -p ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.4/linux_amd64
-cp terraform-provider-mreg ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.4/linux_amd64/
+mkdir -p ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.5/linux_amd64
+cp terraform-provider-mreg ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.5/linux_amd64/
 popd >/dev/null
 rm -rf .terraform .terraform.lock.hcl terraform.tfstate crash.log
 terraform init

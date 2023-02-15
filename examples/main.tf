@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     mreg = {
-      version = "0.1.4"
+      version = "0.1.5"
       source  = "uio.no/usit/mreg"
     }
   }
@@ -28,6 +28,7 @@ resource "mreg_hosts" "my_hosts" {
   contact = "your.email.address@example.com"
   comment = "Created by the Terraform provider for Mreg"
   network = "192.0.2.0/24"
+  policies = "without_monitoring, backup_no_backup"
 }
 
 locals {
@@ -42,6 +43,8 @@ resource "mreg_hosts" "loop_hosts" {
   }
   contact = "your.email.address@example.com"
   comment = "Created by the Terraform provider for Mreg"
+  network = "192.0.2.0/24"
+}
 
 resource "mreg_hosts" "metahosts" {
   # hosts without IP addresses
