@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -76,6 +75,17 @@ func resourceHosts() *schema.Resource {
 	}
 }
 
+func splitString(source string) []string {
+	result := make([]string, 0)
+	for _, s := range strings.Split(source, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
 func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -84,17 +94,8 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	hosts := d.Get("host").([]interface{})
 	comment := d.Get("comment").(string)
 	contact := d.Get("contact").(string)
-	network := d.Get("network").(string)
-	policies_string := d.Get("policies").(string)
-	policies := make([]string, 0)
-	if policies_string != "" {
-		for _, s := range strings.Split(policies_string, ",") {
-			s = strings.TrimSpace(s)
-			if s != "" {
-				policies = append(policies, s)
-			}
-		}
-	}
+	networks := splitString(d.Get("network").(string))
+	policies := splitString(d.Get("policies").(string))
 
 	lock := fslock.New("terraform-provider-mreg-lockfile")
 	lock.Lock()
@@ -106,24 +107,7 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		hostname := host["name"].(string)
 		hostnames[i] = hostname
 
-		var ipaddress string
-
-		manual_ip := host["manual_ipaddress"].(string)
-		if manual_ip != "" {
-			ipaddress = manual_ip
-		} else {
-			if network != "" {
-				// Find a free IP address in Mreg
-				body, _, diags := apiClient.httpRequest(
-					"GET", fmt.Sprintf("/api/v1/networks/%s/first_unused", url.QueryEscape(network)),
-					nil, http.StatusOK)
-				if len(diags) > 0 {
-					return diags
-				}
-
-				ipaddress = strings.Trim(body, "\"")
-			}
-		}
+		manual_ips := splitString(host["manual_ipaddress"].(string))
 
 		// Allocate a new host object in Mreg
 		postdata := map[string]interface{}{
@@ -131,13 +115,52 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			"contact": contact,
 			"comment": comment,
 		}
-		// Only add the ipaddress parameter if the host is supposed to have an IP address, or it will fail
-		if ipaddress != "" {
-			postdata["ipaddress"] = ipaddress
+		if len(manual_ips) > 0 {
+			postdata["ipaddress"] = manual_ips[0]
+		} else if len(networks) > 0 {
+			postdata["network"] = networks[0]
 		}
 		_, _, diags := apiClient.httpRequest("POST", "/api/v1/hosts/", postdata, http.StatusCreated)
 		if len(diags) > 0 {
 			return diags
+		}
+
+		// Retrieve the host by name to find Mreg's internal ID for the host
+		_, body, diags := apiClient.httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(hostname), nil, http.StatusOK)
+		if len(diags) > 0 {
+			return diags
+		}
+		result := body.(map[string]interface{})
+		host_id := int(result["id"].(float64))
+
+		// Assign any additional ip addresses
+		for i := 1; i < len(manual_ips); i++ {
+			postdata := map[string]interface{}{
+				"ipaddress": manual_ips[i],
+				"host":      host_id,
+			}
+			_, _, diags := apiClient.httpRequest("POST", "/api/v1/ipaddresses/", postdata, http.StatusCreated)
+			if len(diags) > 0 {
+				return diags
+			}
+		}
+		if len(manual_ips) == 0 {
+			for i := 1; i < len(networks); i++ {
+				// Find an unused address
+				_, body, diags := apiClient.httpRequest("GET", "/api/v1/networks/"+networks[i]+"/first_unused", nil, http.StatusOK)
+				if len(diags) > 0 {
+					return diags
+				}
+				ipaddress := body.(string)
+				postdata := map[string]interface{}{
+					"ipaddress": ipaddress,
+					"host":      host_id,
+				}
+				_, _, diags = apiClient.httpRequest("POST", "/api/v1/ipaddresses/", postdata, http.StatusCreated)
+				if len(diags) > 0 {
+					return diags
+				}
+			}
 		}
 
 		// Assign host policies, if any
@@ -151,8 +174,24 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			}
 		}
 
+		// Retrieve information about the host to find out which ip addresses it ended up with
+		_, body, diags = apiClient.httpRequest("GET", "/api/v1/hosts/"+url.QueryEscape(hostname), nil, http.StatusOK)
+		if len(diags) > 0 {
+			return diags
+		}
+		result = body.(map[string]interface{})
+		ipaddressesCommaSeparated := ""
+		for _, elem := range result["ipaddresses"].([]interface{}) {
+			m := elem.(map[string]interface{})
+			if ipaddressesCommaSeparated == "" {
+				ipaddressesCommaSeparated = m["ipaddress"].(string)
+			} else {
+				ipaddressesCommaSeparated = ipaddressesCommaSeparated + "," + m["ipaddress"].(string)
+			}
+		}
+
 		// Update the ResourceData
-		host["ipaddress"] = ipaddress
+		host["ipaddress"] = ipaddressesCommaSeparated
 		host["comment"] = comment
 		host["contact"] = contact
 		hosts[i] = host
@@ -194,9 +233,20 @@ func resourceHostsRead(ctx context.Context, d *schema.ResourceData, m interface{
 		}
 		result := body.(map[string]interface{})
 
+		// make a comma-separated list of the IP address(es) in case there are many
+		ipaddressesCommaSeparated := ""
+		for _, elem := range result["ipaddresses"].([]interface{}) {
+			m := elem.(map[string]interface{})
+			if ipaddressesCommaSeparated == "" {
+				ipaddressesCommaSeparated = m["ipaddress"].(string)
+			} else {
+				ipaddressesCommaSeparated = ipaddressesCommaSeparated + "," + m["ipaddress"].(string)
+			}
+		}
+
 		// Update the data model with data from Mreg
 		host["comment"] = result["comment"]
-		host["ipaddress"] = GetStringFromData(result, "ipaddresses.0.ipaddress")
+		host["ipaddress"] = ipaddressesCommaSeparated
 		host["contact"] = result["contact"]
 		hosts[i] = host
 
@@ -242,28 +292,4 @@ func compoundId(hostnames []string) string {
 		hash.Write([]byte(s))
 	}
 	return fmt.Sprintf("%x", hash.Sum(nil))
-}
-
-// GetStringFromData lets you specify a path to the value that you want
-// (e.g. "aaa.bbb.ccc") and have it extracted from the data structure.
-func GetStringFromData(v interface{}, path string) string {
-	for _, key := range strings.Split(path, ".") {
-		iKey, err := strconv.ParseInt(key, 10, 32)
-		if err == nil {
-			// If the key is a number, we assume the structure is an array
-			arr, ok := v.([]interface{})
-			if !ok || int64(len(arr)) <= iKey {
-				return ""
-			}
-			v = arr[iKey]
-		} else {
-			// If the key isn't a number, we assume the structure is a map
-			m, ok := v.(map[string]interface{})
-			if !ok {
-				return ""
-			}
-			v = m[key]
-		}
-	}
-	return fmt.Sprintf("%v", v)
 }

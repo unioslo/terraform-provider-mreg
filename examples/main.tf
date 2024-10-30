@@ -1,14 +1,14 @@
 terraform {
   required_providers {
     mreg = {
-      version = "0.1.5"
+      version = "0.1.6"
       source  = "uio.no/usit/mreg"
     }
   }
 }
 
 provider "mreg" {
-  serverurl = "https://mreg-test01.example.com/"
+  serverurl = "https://mreg-test.example.com/"
   token     = "1234567890ABCDEF" # replace with actual token
 }
 
@@ -20,14 +20,14 @@ resource "mreg_hosts" "my_hosts" {
   host {
     name = "terraform-provider-test02.example.com"
     # You can also manually pick an ip address instead of getting assigned a free one
-    manual_ipaddress = "192.0.2.55"
+    manual_ipaddress = "192.168.0.55"
   }
   host {
     name = "terraform-provider-test03.example.com"
   }
   contact = "your.email.address@example.com"
   comment = "Created by the Terraform provider for Mreg"
-  network = "192.0.2.0/24"
+  network = "192.168.0.0/16"
   policies = "without_monitoring, backup_no_backup"
 }
 
@@ -43,7 +43,7 @@ resource "mreg_hosts" "loop_hosts" {
   }
   contact = "your.email.address@example.com"
   comment = "Created by the Terraform provider for Mreg"
-  network = "192.0.2.0/24"
+  network = "192.168.0.0/16"
 }
 
 resource "mreg_hosts" "metahosts" {
@@ -71,6 +71,20 @@ resource "mreg_dns_srv" "srv" {
   port        = 3306
 }
 
+# hosts with both IPv4 and IPv6
+resource "mreg_hosts" "host_with_multiple_ips" {
+  host {
+    name = "terraform-provider-test04.example.com"
+  }
+  host {
+    name = "terraform-provider-test05.example.com"
+    manual_ipaddress = "192.168.0.243,fd12:3456:789a:1::1" # the manual_ipaddress field can have a comma-separated list of addresses
+  }
+  contact = "your.email.address@example.com"
+  comment = "Created by the Terraform provider for Mreg"
+  network = "192.168.0.0/16,fc00::/7"     # the network field can have a comma-separated list of networks
+}
+
 output "foo" {
   value = mreg_hosts.my_hosts
 }
@@ -81,4 +95,8 @@ output "bar" {
 
 output "baz" {
   value = mreg_dns_srv.srv
+}
+
+output "qux" {
+  value = mreg_hosts.host_with_multiple_ips
 }
