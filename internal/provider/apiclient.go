@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -38,9 +36,6 @@ func (apiClient apiClient) httpRequest(method, urlPath string, requestBody map[s
 
 	// Set up the request
 	url := apiClient.UrlWithoutSlash() + urlPath
-	if method == "GET" {
-		url += "?" + strconv.Itoa(rand.Int())
-	}
 	req, err := http.NewRequest(method, url, reqBodyReader)
 	if err != nil {
 		diags = diag.FromErr(err)

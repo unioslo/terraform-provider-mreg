@@ -4,15 +4,18 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
-	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/fslock"
 )
+
+var seen []string
 
 func resourceHosts() *schema.Resource {
 	return &schema.Resource{
@@ -39,20 +42,27 @@ func resourceHosts() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"manual_ipaddress": &schema.Schema{
+						"ipv4": &schema.Schema{
 							Type:     schema.TypeString,
 							Optional: true,
 							ForceNew: true,
 						},
-						"ipaddress": &schema.Schema{
+						"ipv6": &schema.Schema{
 							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: true,
+						},
+						"ipaddress": {
+							Type:     schema.TypeList,
+							Elem:     &schema.Schema{Type: schema.TypeString},
 							Computed: true,
 						},
 					},
 				},
 			},
-			"network": &schema.Schema{
-				Type:     schema.TypeString,
+			"network": {
+				Type:     schema.TypeList,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 				Optional: true,
 				ForceNew: true,
 			},
@@ -66,8 +76,9 @@ func resourceHosts() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"policies": &schema.Schema{
-				Type:     schema.TypeString,
+			"policies": {
+				Type:     schema.TypeList,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 				Optional: true,
 				ForceNew: true,
 			},
@@ -75,13 +86,23 @@ func resourceHosts() *schema.Resource {
 	}
 }
 
-func splitString(source string) []string {
+/*func splitString(source string) []string {
 	result := make([]string, 0)
 	for _, s := range strings.Split(source, ",") {
 		s = strings.TrimSpace(s)
 		if s != "" {
 			result = append(result, s)
 		}
+	}
+	return result
+}*/
+
+func convertTerraformInputToListOfStrings(input interface{}) []string {
+	result := make([]string, 0)
+	a := input.([]interface{})
+	for _, elem := range a {
+		b := elem.(string)
+		result = append(result, b)
 	}
 	return result
 }
@@ -94,8 +115,8 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	hosts := d.Get("host").([]interface{})
 	comment := d.Get("comment").(string)
 	contact := d.Get("contact").(string)
-	networks := splitString(d.Get("network").(string))
-	policies := splitString(d.Get("policies").(string))
+	networks := convertTerraformInputToListOfStrings(d.Get("network"))
+	policies := convertTerraformInputToListOfStrings(d.Get("policies"))
 
 	lock := fslock.New("terraform-provider-mreg-lockfile")
 	lock.Lock()
@@ -107,7 +128,14 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		hostname := host["name"].(string)
 		hostnames[i] = hostname
 
-		manual_ips := splitString(host["manual_ipaddress"].(string))
+		//TODO manual_ips := convertTerraformInputToListOfStrings(host["manual_ipaddress"])
+		manual_ips := make([]string, 0)
+		if s, ok := host["ipv4"].(string); ok && s != "" {
+			manual_ips = append(manual_ips, s)
+		}
+		if s, ok := host["ipv6"].(string); ok && s != "" {
+			manual_ips = append(manual_ips, s)
+		}
 
 		// Allocate a new host object in Mreg
 		postdata := map[string]interface{}{
@@ -147,11 +175,31 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		if len(manual_ips) == 0 {
 			for i := 1; i < len(networks); i++ {
 				// Find an unused address
-				_, body, diags := apiClient.httpRequest("GET", "/api/v1/networks/"+networks[i]+"/first_unused", nil, http.StatusOK)
-				if len(diags) > 0 {
-					return diags
+				var ipaddress string
+				retries := 0
+				for true {
+					_, body, diags := apiClient.httpRequest("GET", "/api/v1/networks/"+networks[i]+"/first_unused", nil, http.StatusOK)
+					if len(diags) > 0 {
+						return diags
+					}
+					ipaddress = body.(string)
+					actuallyUnused := true
+					for _, v := range seen {
+						if v == ipaddress {
+							actuallyUnused = false
+							break
+						}
+					}
+					if actuallyUnused {
+						seen = append(seen, ipaddress)
+						break
+					} else if retries > 100 {
+						log.Fatalf("Unable to find enough unused addresses on network %s", networks[i])
+					} else {
+						time.Sleep(time.Second)
+						retries++
+					}
 				}
-				ipaddress := body.(string)
 				postdata := map[string]interface{}{
 					"ipaddress": ipaddress,
 					"host":      host_id,
@@ -180,18 +228,15 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 			return diags
 		}
 		result = body.(map[string]interface{})
-		ipaddressesCommaSeparated := ""
+
+		ipaddresses := make([]string, 0)
 		for _, elem := range result["ipaddresses"].([]interface{}) {
 			m := elem.(map[string]interface{})
-			if ipaddressesCommaSeparated == "" {
-				ipaddressesCommaSeparated = m["ipaddress"].(string)
-			} else {
-				ipaddressesCommaSeparated = ipaddressesCommaSeparated + "," + m["ipaddress"].(string)
-			}
+			ipaddresses = append(ipaddresses, m["ipaddress"].(string))
 		}
 
 		// Update the ResourceData
-		host["ipaddress"] = ipaddressesCommaSeparated
+		host["ipaddress"] = ipaddresses
 		host["comment"] = comment
 		host["contact"] = contact
 		hosts[i] = host
@@ -199,7 +244,9 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 		d.Set("host", hosts)
 		d.SetId(hostname)
 	}
-	d.Set("host", hosts)
+	if err := d.Set("host", hosts); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(compoundId(hostnames))
 
 	return diags
@@ -233,27 +280,23 @@ func resourceHostsRead(ctx context.Context, d *schema.ResourceData, m interface{
 		}
 		result := body.(map[string]interface{})
 
-		// make a comma-separated list of the IP address(es) in case there are many
-		ipaddressesCommaSeparated := ""
+		ipaddresses := make([]string, 0)
 		for _, elem := range result["ipaddresses"].([]interface{}) {
 			m := elem.(map[string]interface{})
-			if ipaddressesCommaSeparated == "" {
-				ipaddressesCommaSeparated = m["ipaddress"].(string)
-			} else {
-				ipaddressesCommaSeparated = ipaddressesCommaSeparated + "," + m["ipaddress"].(string)
-			}
+			ipaddresses = append(ipaddresses, m["ipaddress"].(string))
 		}
 
 		// Update the data model with data from Mreg
 		host["comment"] = result["comment"]
-		host["ipaddress"] = ipaddressesCommaSeparated
+		host["ipaddress"] = ipaddresses
 		host["contact"] = result["contact"]
 		hosts[i] = host
-
 		hostnames = append(hostnames, hostname)
 	}
 
-	d.Set("host", hosts)
+	if err := d.Set("host", hosts); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(compoundId(hostnames))
 
 	return diag.Diagnostics{}
