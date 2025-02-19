@@ -3,12 +3,13 @@ set -e
 cd `dirname $0`
 pushd .. >/dev/null
 rm -f terraform-provider-mreg
+go clean
 go get
 go build
 #TODO after the provider is added to the registry, there's no need to copy the file here
-rm -rf ~/.terraform.d/plugins/uio.no/usit/mreg/
-mkdir -p ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.6/linux_amd64
-cp terraform-provider-mreg ~/.terraform.d/plugins/uio.no/usit/mreg/0.1.6/linux_amd64/
+rm -rf ~/.terraform.d/plugins/unioslo/usit/mreg/
+mkdir -p ~/.terraform.d/plugins/unioslo/usit/mreg/0.1.6/linux_amd64
+cp terraform-provider-mreg ~/.terraform.d/plugins/unioslo/usit/mreg/0.1.6/linux_amd64/
 popd >/dev/null
 rm -rf .terraform .terraform.lock.hcl terraform.tfstate* crash.log
 terraform init

@@ -2,7 +2,7 @@ terraform {
   required_providers {
     mreg = {
       version = "0.1.6"
-      source  = "uio.no/usit/mreg"
+      source  = "unioslo/usit/mreg"
     }
   }
 }

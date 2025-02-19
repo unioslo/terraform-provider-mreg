@@ -16,37 +16,37 @@ func resourceSRV() *schema.Resource {
 		ReadContext:   resourceSRVRead,
 		DeleteContext: resourceSRVDelete,
 		Schema: map[string]*schema.Schema{
-			"target_host": &schema.Schema{
+			"target_host": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"service": &schema.Schema{
+			"service": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"proto": &schema.Schema{
+			"proto": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"name": &schema.Schema{
+			"name": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"priority": &schema.Schema{
+			"priority": {
 				Type:     schema.TypeInt,
 				Required: true,
 				ForceNew: true,
 			},
-			"weight": &schema.Schema{
+			"weight": {
 				Type:     schema.TypeInt,
 				Required: true,
 				ForceNew: true,
 			},
-			"port": &schema.Schema{
+			"port": {
 				Type:     schema.TypeInt,
 				Required: true,
 				ForceNew: true,

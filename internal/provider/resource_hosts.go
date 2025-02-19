@@ -23,31 +23,31 @@ func resourceHosts() *schema.Resource {
 		ReadContext:   resourceHostsRead,
 		DeleteContext: resourceHostsDelete,
 		Schema: map[string]*schema.Schema{
-			"host": &schema.Schema{
+			"host": {
 				Type:     schema.TypeList,
 				Required: true,
 				ForceNew: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name": &schema.Schema{
+						"name": {
 							Type:     schema.TypeString,
 							Required: true,
 							ForceNew: true,
 						},
-						"comment": &schema.Schema{
+						"comment": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"contact": &schema.Schema{
+						"contact": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"ipv4": &schema.Schema{
+						"ipv4": {
 							Type:     schema.TypeString,
 							Optional: true,
 							ForceNew: true,
 						},
-						"ipv6": &schema.Schema{
+						"ipv6": {
 							Type:     schema.TypeString,
 							Optional: true,
 							ForceNew: true,
@@ -66,12 +66,12 @@ func resourceHosts() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
-			"comment": &schema.Schema{
+			"comment": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
 			},
-			"contact": &schema.Schema{
+			"contact": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
@@ -118,8 +118,11 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 	networks := convertTerraformInputToListOfStrings(d.Get("network"))
 	policies := convertTerraformInputToListOfStrings(d.Get("policies"))
 
-	lock := fslock.New("terraform-provider-mreg-lockfile")
-	lock.Lock()
+	lockfile := "/tmp/terraform-provider-mreg-lockfile"
+	lock := fslock.New(lockfile)
+	if err := lock.Lock(); err != nil {
+		return diag.Errorf("Unable to use lockfile %s: %s", lockfile, err.Error())
+	}
 	defer lock.Unlock()
 
 	hostnames := make([]string, len(hosts))
@@ -177,7 +180,7 @@ func resourceHostsCreate(ctx context.Context, d *schema.ResourceData, m interfac
 				// Find an unused address
 				var ipaddress string
 				retries := 0
-				for true {
+				for {
 					_, body, diags := apiClient.httpRequest("GET", "/api/v1/networks/"+networks[i]+"/first_unused", nil, http.StatusOK)
 					if len(diags) > 0 {
 						return diags

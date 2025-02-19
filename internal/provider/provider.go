@@ -32,21 +32,21 @@ func New(version string) func() *schema.Provider {
 			},
 			DataSourcesMap: map[string]*schema.Resource{},
 			Schema: map[string]*schema.Schema{
-				"serverurl": &schema.Schema{
+				"serverurl": {
 					Type:     schema.TypeString,
 					Required: true,
 				},
-				"token": &schema.Schema{
+				"token": {
 					Type:      schema.TypeString,
 					Optional:  true,
 					Sensitive: true,
 				},
-				"username": &schema.Schema{
+				"username": {
 					Type:      schema.TypeString,
 					Optional:  true,
 					Sensitive: true,
 				},
-				"password": &schema.Schema{
+				"password": {
 					Type:      schema.TypeString,
 					Optional:  true,
 					Sensitive: true,
